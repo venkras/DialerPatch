@@ -263,7 +263,7 @@ public class MainActivity extends Activity {
 
     private String runSu(String cmd) {
         try {
-            ProcessBuilder pb = new ProcessBuilder("su", "-c", cmd);
+            ProcessBuilder pb = new ProcessBuilder("su", "-c", wrapForRoot(cmd));
             pb.redirectErrorStream(true);
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
@@ -340,5 +340,11 @@ public class MainActivity extends Activity {
             .setView(sv)
             .setPositiveButton("OK", null)
             .show();
+    }
+
+    private String wrapForRoot(String cmd) {
+        String inner = "sh -c '" + cmd + "'";
+        return "if command -v nsenter >/dev/null 2>&1; then nsenter -t 1 -m " + inner
+            + "; else " + inner + "; fi";
     }
 }
