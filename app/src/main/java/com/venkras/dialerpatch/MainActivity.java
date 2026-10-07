@@ -344,7 +344,7 @@ public class MainActivity extends Activity {
 
     private String wrapForRoot(String cmd) {
         String inner = "sh -c '" + cmd + "'";
-        return "if command -v nsenter >/dev/null 2>&1; then nsenter -t 1 -m " + inner
+        return "if command -v nsenter >/dev/null 2>&1; then nsenter -t 1 -m -- " + inner
             + "; else " + inner + "; fi";
     }
 }
