@@ -261,9 +261,9 @@ public class MainActivity extends Activity {
         return "audio";
     }
 
-    private String runSu(String cmd) {
+    private String runSuWith(String suPath, String cmd) {
         try {
-            ProcessBuilder pb = new ProcessBuilder("su", "-c", wrapForRoot(cmd));
+            ProcessBuilder pb = new ProcessBuilder(suPath, "-c", wrapForRoot(cmd));
             pb.redirectErrorStream(true);
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
@@ -346,5 +346,25 @@ public class MainActivity extends Activity {
         String inner = "sh -c '" + cmd + "'";
         return "if command -v nsenter >/dev/null 2>&1; then nsenter -t 1 -m -- " + inner
             + "; else " + inner + "; fi";
+    }
+
+    private String runSu(String cmd) {
+        String[] candidates = {
+            "/system/bin/su", "/system/xbin/su", "/sbin/su", "/debug_ramdisk/su",
+            "/data/adb/ksu/bin/su", "/data/adb/ap/bin/su", "su"
+        };
+        String last = null;
+        StringBuilder diag = new StringBuilder();
+        for (String c : candidates) {
+            String r = runSuWith(c, cmd);
+            if (r != null && r.contains("Cannot run program")) {
+                last = r;
+                diag.append(c).append(" exists=").append(new File(c).exists()).append('\n');
+                continue;
+            }
+            android.util.Log.i("DialerPatchApp", "su used: " + c + ", result: " + r);
+            return r;
+        }
+        return "su not found\n" + diag + last;
     }
 }
