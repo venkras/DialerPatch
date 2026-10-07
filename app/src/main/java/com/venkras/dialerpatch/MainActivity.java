@@ -13,7 +13,9 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.CheckBox;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -110,6 +112,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < KEYS.length; i++) {
             addRow(root, i);
         }
+        addLockSection(root);
         setContentView(scroll);
     }
 
@@ -366,5 +369,99 @@ public class MainActivity extends Activity {
             return r;
         }
         return "su not found\n" + diag + last;
+    }
+
+    private String lockLabel(int s) {
+        return s == 0 ? t("Off", "Выключено") : s + t(" s", " с");
+    }
+
+    private void addLockSection(LinearLayout root) {
+        int current = prefs.getInt("lock_seconds", 0);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(28), 0, dp(8));
+        root.addView(box);
+
+        TextView title = new TextView(this);
+        title.setText(t("Lock time after a sound", "Блокировка после звука"));
+        title.setTextSize(18);
+        title.setTypeface(null, Typeface.BOLD);
+        box.addView(title);
+
+        TextView hint = new TextView(this);
+        hint.setText(t(
+            "How many seconds the Audio Emoji buttons stay locked after a sound starts. It can only shorten the lock: sounds shorter than this keep their normal lock.",
+            "Сколько секунд кнопки аудиоэмодзи заблокированы после начала звука. Блокировку можно только сократить: у коротких звуков она остаётся обычной."));
+        hint.setPadding(0, dp(4), 0, dp(4));
+        box.addView(hint);
+
+        final TextView value = new TextView(this);
+        value.setTextSize(16);
+        box.addView(value);
+
+        final SeekBar bar = new SeekBar(this);
+        bar.setMax(4);
+        bar.setProgress(current > 0 ? current - 1 : 2);
+        bar.setEnabled(current > 0);
+        box.addView(bar, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout ticks = new LinearLayout(this);
+        ticks.setOrientation(LinearLayout.HORIZONTAL);
+        for (int s = 1; s <= 5; s++) {
+            TextView tick = new TextView(this);
+            tick.setText(String.valueOf(s));
+            tick.setGravity(Gravity.CENTER);
+            ticks.addView(tick, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        box.addView(ticks);
+
+        final CheckBox offBox = new CheckBox(this);
+        offBox.setText(t("Off (lock until the sound ends)", "Выключено (блокировка до конца звука)"));
+        offBox.setChecked(current == 0);
+        box.addView(offBox);
+
+        value.setText(lockLabel(current));
+
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                value.setText(lockLabel(progress + 1));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+                saveLock(sb.getProgress() + 1);
+            }
+        });
+        offBox.setOnCheckedChangeListener((btn, checked) -> {
+            bar.setEnabled(!checked);
+            int sec = checked ? 0 : bar.getProgress() + 1;
+            value.setText(lockLabel(sec));
+            saveLock(sec);
+        });
+    }
+
+    private void saveLock(final int seconds) {
+        prefs.edit().putInt("lock_seconds", seconds).apply();
+        new Thread(() -> {
+            String f = CUSTOM_DIR + "/lock_seconds";
+            String err = runSu("D=" + CUSTOM_DIR + "; U=$(stat -c %U " + DIALER_FILES + ") && mkdir -p $D && echo "
+                + seconds + " > " + f + " && chown $U:$U $D " + f
+                + " && chmod 700 $D && chmod 600 " + f + " && (restorecon -R $D || true)");
+            final String e = err;
+            runOnUiThread(() -> {
+                if (e != null) {
+                    showError(e);
+                } else {
+                    Toast.makeText(this, t("Saved", "Сохранено"), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }).start();
     }
 }
