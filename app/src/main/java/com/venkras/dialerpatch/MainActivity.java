@@ -194,7 +194,7 @@ public class MainActivity extends Activity {
                     prefs.edit().putString("name_" + key, shownName).apply();
                     toast(t("Saved", "Сохранено"));
                 } else {
-                    toast(t("Failed: ", "Ошибка: ") + err);
+                    showError(err);
                 }
                 render();
             });
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
                     prefs.edit().remove("name_" + key).apply();
                     toast(t("Reset to original", "Возвращён оригинал"));
                 } else {
-                    toast(t("Failed: ", "Ошибка: ") + e);
+                    showError(e);
                 }
                 render();
             });
@@ -325,5 +325,20 @@ public class MainActivity extends Activity {
                 playButtons[i].setText(i == playingIdx ? t("Stop", "Стоп") : t("Play", "Играть"));
             }
         }
+    }
+
+    private void showError(String err) {
+        android.util.Log.e("DialerPatchApp", "failed: " + err);
+        ScrollView sv = new ScrollView(this);
+        TextView tv = new TextView(this);
+        tv.setText(err);
+        tv.setTextIsSelectable(true);
+        tv.setPadding(dp(20), dp(12), dp(20), dp(12));
+        sv.addView(tv);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(t("Failed", "Ошибка"))
+            .setView(sv)
+            .setPositiveButton("OK", null)
+            .show();
     }
 }
