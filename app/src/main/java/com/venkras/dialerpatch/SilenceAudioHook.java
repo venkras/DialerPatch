@@ -1,6 +1,7 @@
 package com.venkras.dialerpatch;
 
 import android.content.Context;
+import android.media.MediaPlayer;
 import android.net.Uri;
 
 import java.io.FileDescriptor;
@@ -14,7 +15,7 @@ public class SilenceAudioHook {
 
     private static final String TAG = "[SilenceAudioHook] ";
     private static final String FLAG = "mute_this_player";
-    
+
     private static final String[] MARKERS = {
             "callrecordingprompt",
             "starting.wav",
@@ -34,12 +35,10 @@ public class SilenceAudioHook {
             XposedBridge.log(TAG + "Error: " + t.getMessage());
         }
     }
-    
+
     private static void hookStringDataSource() {
         XposedHelpers.findAndHookMethod(
-                android.media.MediaPlayer.class,
-                "setDataSource",
-                String.class,
+                MediaPlayer.class, "setDataSource", String.class,
                 new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
@@ -54,14 +53,11 @@ public class SilenceAudioHook {
 
     private static void hookUriDataSource() {
         XposedHelpers.findAndHookMethod(
-                android.media.MediaPlayer.class,
-                "setDataSource",
-                Context.class,
-                Uri.class,
+                MediaPlayer.class, "setDataSource", Context.class, Uri.class,
                 new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        Uri uri = (Uri) param.args[1];         
+                        Uri uri = (Uri) param.args[1];  
                         if (uri != null && isPrompt(uri.toString())) {
                             flag(param);
                             XposedBridge.log(TAG + "Flagged (Uri): " + uri);
@@ -73,16 +69,14 @@ public class SilenceAudioHook {
     private static void hookFdDataSource() {
         try {
             XposedHelpers.findAndHookMethod(
-                    android.media.MediaPlayer.class,
-                    "setDataSource",
-                    FileDescriptor.class,
+                    MediaPlayer.class, "setDataSource", FileDescriptor.class,
                     new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             String resolved = resolveFd((FileDescriptor) param.args[0]);
                             if (resolved != null && isPrompt(resolved)) {
                                 flag(param);
-                                XposedBridge.log(TAG + "Flagged (FD→" + resolved + ")");
+                                XposedBridge.log(TAG + "Flagged (FD): " + resolved);
                             }
                         }
                     });
@@ -93,18 +87,30 @@ public class SilenceAudioHook {
 
     private static void hookStart() {
         XposedHelpers.findAndHookMethod(
-                android.media.MediaPlayer.class,
-                "start",
+                MediaPlayer.class, "start",
                 new XC_MethodHook() {
                     @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        Object flag = XposedHelpers.getAdditionalInstanceField(
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        Object f = XposedHelpers.getAdditionalInstanceField(
                                 param.thisObject, FLAG);
-                        if (Boolean.TRUE.equals(flag)) {
-                            param.setResult(null);        
-                            XposedHelpers.removeAdditionalInstanceField(
-                                    param.thisObject, FLAG);
-                            XposedBridge.log(TAG + "Suppressed MediaPlayer.start() (recording prompt)");
+                        if (!Boolean.TRUE.equals(f)) return;
+
+                        XposedHelpers.removeAdditionalInstanceField(
+                                param.thisObject, FLAG);
+
+                        MediaPlayer mp = (MediaPlayer) param.thisObject;
+                        try {
+                            mp.setVolume(0f, 0f);
+
+                            int dur = mp.getDuration();
+                            if (dur > 0) {
+                                mp.seekTo(dur);
+                            } else {
+                                mp.seekTo(Integer.MAX_VALUE);
+                            }
+                            XposedBridge.log(TAG + "Silenced + seeked to end (dur=" + dur + ")");
+                        } catch (Throwable t) {
+                            XposedBridge.log(TAG + "post-start error: " + t.getMessage());
                         }
                     }
                 });
@@ -127,11 +133,11 @@ public class SilenceAudioHook {
     private static String resolveFd(FileDescriptor fd) {
         if (fd == null) return null;
         try {
-            java.lang.reflect.Field f = FileDescriptor.class.getDeclaredField("descriptor");
+            java.lang.reflect.Field f =
+                    FileDescriptor.class.getDeclaredField("descriptor");
             f.setAccessible(true);
             int num = f.getInt(fd);
-            java.io.File link = new java.io.File("/proc/self/fd/" + num);
-            return link.getCanonicalPath();
+            return new java.io.File("/proc/self/fd/" + num).getCanonicalPath();
         } catch (Throwable t) {
             return null;
         }
