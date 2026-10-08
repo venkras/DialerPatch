@@ -18,10 +18,11 @@ Audio Emoji sounds are sent in the caller's voice stream, so the other person do
 ## Installation
 
 1. Install the APK.
-2. Enable the module in Vector (or LSPosed).
-3. Set the scope to `com.google.android.dialer`.
-4. Force-stop Phone by Google and open it again.
-5. Check Settings in the Phone app for Audio Emoji.
+2. Grant root permissions
+3. Enable the module in Vector (or LSPosed).
+4. Set the scope to `com.google.android.dialer`.
+5. Force-stop Phone by Google and open it again.
+6. Check Settings in the Phone app for Audio Emoji.
 
 ## Tested on
 
