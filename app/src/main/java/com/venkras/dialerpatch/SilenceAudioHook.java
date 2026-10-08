@@ -1,9 +1,8 @@
 package com.venkras.dialerpatch;
 
-import android.media.AudioTrack;
+import android.content.Context;
 import android.media.MediaPlayer;
-import android.media.SoundPool;
-
+import android.net.Uri;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -15,94 +14,42 @@ public class SilenceAudioHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            hookSoundPool();
-            hookAudioTrack();
-            hookMediaPlayer();
-            XposedBridge.log(TAG + "Hooks installed successfully");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "Installation error: " + t.getMessage());
-        }
-    }
+            XC_MethodHook dataSourceHook = new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    String dataSource = "";
+                    if (param.args.length > 0 && param.args[0] != null) {
+                        dataSource = param.args[0].toString().toLowerCase();
+                    }
 
-    private static void hookSoundPool() {
-        try {
-            XposedHelpers.findAndHookMethod(
-                SoundPool.class,
-                "play",
-                int.class, float.class, float.class, int.class, int.class, float.class,
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (isCallFromRecordingPrompt()) {
-                            param.args[1] = 0.0f; // leftVolume
-                            param.args[2] = 0.0f; // rightVolume
-                            XposedBridge.log(TAG + "SoundPool.play volume set to 0");
-                        }
+                    if (dataSource.contains("callrecordingprompt") || 
+                        dataSource.contains("starting.wav") || 
+                        dataSource.contains("ending.wav")) {
+                        
+                        XposedHelpers.setAdditionalInstanceField(param.thisObject, "mute_this_player", true);
+                        XposedBridge.log(TAG + "Marked recording prompt audio for muting: " + dataSource);
                     }
                 }
-            );
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "SoundPool hook error: " + t.getMessage());
-        }
-    }
+            };
 
-    private static void hookAudioTrack() {
-        try {
-            XposedHelpers.findAndHookMethod(
-                AudioTrack.class,
-                "play",
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (isCallFromRecordingPrompt()) {
-                            AudioTrack track = (AudioTrack) param.thisObject;
-                            track.setVolume(0.0f);
-                            XposedBridge.log(TAG + "AudioTrack.play volume set to 0");
-                        }
+            XposedHelpers.findAndHookMethod(MediaPlayer.class, "setDataSource", String.class, dataSourceHook);
+            XposedHelpers.findAndHookMethod(MediaPlayer.class, "setDataSource", Context.class, Uri.class, dataSourceHook);
+
+            XposedHelpers.findAndHookMethod(MediaPlayer.class, "start", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Object flag = XposedHelpers.getAdditionalInstanceField(param.thisObject, "mute_this_player");
+                    if (flag instanceof Boolean && (Boolean) flag) {
+                        MediaPlayer player = (MediaPlayer) param.thisObject;
+                        player.setVolume(0.0f, 0.0f);
+                        XposedBridge.log(TAG + "Successfully silenced MediaPlayer.start()!");
                     }
                 }
-            );
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + "AudioTrack hook error: " + t.getMessage());
-        }
-    }
+            });
 
-    private static void hookMediaPlayer() {
-        try {
-            XposedHelpers.findAndHookMethod(
-                MediaPlayer.class,
-                "start",
-                new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (isCallFromRecordingPrompt()) {
-                            MediaPlayer player = (MediaPlayer) param.thisObject;
-                            player.setVolume(0.0f, 0.0f);
-                            XposedBridge.log(TAG + "MediaPlayer.start volume set to 0");
-                        }
-                    }
-                }
-            );
+            XposedBridge.log(TAG + "Hook installed successfully.");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + "MediaPlayer hook error: " + t.getMessage());
+            XposedBridge.log(TAG + "Error: " + t.getMessage());
         }
-    }
-
-    private static boolean isCallFromRecordingPrompt() {
-        try {
-            StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-            for (StackTraceElement element : stackTrace) {
-                String className = element.getClassName().toLowerCase();
-                String methodName = element.getMethodName().toLowerCase();
-                if (className.contains("callrecording") 
-                        || className.contains("prompt") 
-                        || methodName.contains("disclaimer") 
-                        || methodName.contains("announcement")) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
     }
 }
