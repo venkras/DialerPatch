@@ -11,11 +11,8 @@ import org.luckypray.dexkit.result.ClassData;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -51,7 +48,6 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
         long currentVersionCode = getAppVersionCode(lpparam);
         File cacheFile = getCacheFile(lpparam);
 
-        // 1. Read from cache (only if versionCode is valid and cache file exists)
         if (currentVersionCode != -1 && cacheFile != null && cacheFile.exists()) {
             String cachedName = readCache(cacheFile, currentVersionCode);
             if (cachedName != null && !cachedName.isEmpty()) {
@@ -64,7 +60,6 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
             }
         }
 
-        // 2. Search via DexKit if not found in cache
         if (targetClass == null) {
             XposedBridge.log("[DialerPatch] Class not found in cache. Starting DexKit search...");
             String foundClassName = findClassWithDexKit(lpparam);
@@ -80,9 +75,18 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
             }
         }
 
-                try { if (loadDexKitNativeLibrary()) SonicHook.install(lpparam); InterruptHook.install(lpparam); NoLockHook.install(lpparam); RecordingHook.install(lpparam); SilenceAudioHook.install(lpparam); } catch (Throwable t) { XposedBridge.log("[DialerPatch] SonicHook error: " + t); }
+        try {
+            if (loadDexKitNativeLibrary()) {
+                SonicHook.install(lpparam);
+                InterruptHook.install(lpparam);
+                NoLockHook.install(lpparam);
+                RecordingHook.install(lpparam);
+		SilenceAudioHook.install(lpparam);
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("[DialerPatch] hooks error: " + t);
+        }
 
-        // 3. Apply hook
         if (targetClass != null) {
             try {
                 java.lang.reflect.Method target = findTargetMethod(targetClass);
@@ -248,4 +252,3 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
         }
     }
 }
-

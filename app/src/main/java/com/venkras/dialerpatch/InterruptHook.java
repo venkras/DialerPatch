@@ -148,6 +148,9 @@ public class InterruptHook {
                 }
             }
         }
+        if (hits.isEmpty()) {
+            return;
+        }
         if (hits.size() != 1) {
             if (!loggedTarget) {
                 loggedTarget = true;
