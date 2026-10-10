@@ -29,7 +29,7 @@ Audio Emoji sounds are sent in the caller's voice stream, so the other person he
 3. Enable the module in Vector (or LSPosed).
 4. Set the scope to `com.google.android.dialer`.
 5. Force-stop Phone by Google and open it again.
-6. Check Settings in the Phone app for Audio Emoji.
+6. Check Settings in the Phone app.
 
 ### Updating
 
@@ -44,7 +44,7 @@ Open the DialerPatch app. There is one block for each emoji with Choose, Play an
 - The app copies the file into the Dialer's private storage using root commands, so it asks for root access. After you reinstall the app with a different signature, grant root again and restart the app.
 - Reset removes your file and the original sound is used again.
 
-## Call recording (experimental)
+## Call recording
 
 The module can unlock the Dialer's built-in call recording in countries where it is disabled. The Dialer's own voice announcement that recording has started is not removed.
 
