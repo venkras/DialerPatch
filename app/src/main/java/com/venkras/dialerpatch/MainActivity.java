@@ -132,13 +132,13 @@ public class MainActivity extends AppCompatActivity {
         choose.setOnClickListener(v -> pick(idx));
 
         MaterialButton play = item.findViewById(R.id.play);
-        play.setText(t("Play", "Играть"));
+        play.setIconResource(R.drawable.ic_play);
         play.setEnabled(new File(getFilesDir(), "sounds/" + key).exists());
         play.setOnClickListener(v -> togglePlay(idx));
         playButtons[idx] = play;
 
         MaterialButton reset = item.findViewById(R.id.reset);
-        reset.setText(t("Reset", "Сбросить"));
+        reset.setIconResource(R.drawable.ic_reset);
         reset.setEnabled(custom != null);
         reset.setOnClickListener(v -> resetSound(idx));
 
@@ -305,7 +305,7 @@ public class MainActivity extends AppCompatActivity {
     private void updatePlayButtons() {
         for (int i = 0; i < playButtons.length; i++) {
             if (playButtons[i] != null) {
-                playButtons[i].setText(i == playingIdx ? t("Stop", "Стоп") : t("Play", "Играть"));
+                playButtons[i].setIconResource(i == playingIdx ? R.drawable.ic_stop : R.drawable.ic_play);
             }
         }
     }
