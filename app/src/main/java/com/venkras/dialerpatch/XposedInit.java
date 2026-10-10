@@ -80,7 +80,7 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
             }
         }
 
-                try { if (loadDexKitNativeLibrary()) SonicHook.install(lpparam); NoLockHook.install(lpparam); RecordingHook.install(lpparam); SilenceAudioHook.install(lpparam); } catch (Throwable t) { XposedBridge.log("[DialerPatch] SonicHook error: " + t); }
+                try { if (loadDexKitNativeLibrary()) SonicHook.install(lpparam); DebugHook.install(lpparam); NoLockHook.install(lpparam); RecordingHook.install(lpparam); SilenceAudioHook.install(lpparam); } catch (Throwable t) { XposedBridge.log("[DialerPatch] SonicHook error: " + t); }
 
         // 3. Apply hook
         if (targetClass != null) {
