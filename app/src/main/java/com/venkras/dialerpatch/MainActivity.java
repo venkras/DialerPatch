@@ -147,6 +147,40 @@ public class MainActivity extends AppCompatActivity {
         list.addView(item);
     }
 
+    private void addModeRow() {
+        View item = getLayoutInflater().inflate(R.layout.item_mode, list, false);
+        ((TextView) item.findViewById(R.id.mode_label)).setText(
+            t("Interrupt previous sound", "Обрывать предыдущий звук"));
+        MaterialSwitch sw = item.findViewById(R.id.mode_switch);
+        sw.setChecked(prefs.getBoolean("interrupt", false));
+        sw.setOnCheckedChangeListener((b, on) -> setInterrupt(on));
+        list.addView(item);
+    }
+
+    private void setInterrupt(final boolean on) {
+        new Thread(() -> {
+            String cmd = on ? modeCommand() : "rm -f " + CUSTOM_DIR + "/mode";
+            final String err = runSu(cmd);
+            runOnUiThread(() -> {
+                if (err == null) {
+                    prefs.edit().putBoolean("interrupt", on).apply();
+                } else {
+                    showError(err);
+                    render();
+                }
+            });
+        }).start();
+    }
+
+    private String modeCommand() {
+        String file = CUSTOM_DIR + "/mode";
+        return "D=" + CUSTOM_DIR + "; U=$(stat -c %U " + DIALER_FILES + ") && "
+            + "mkdir -p $D && chown $U:$U $D && chmod 700 $D"
+            + " && echo interrupt > " + file
+            + " && chown $U:$U " + file + " && chmod 600 " + file
+            + " && (restorecon -R $D || true)";
+    }
+
     private void pick(int idx) {
         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
         i.setType("audio/*");
