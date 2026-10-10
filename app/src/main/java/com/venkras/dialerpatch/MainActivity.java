@@ -1,21 +1,25 @@
 package com.venkras.dialerpatch;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.database.Cursor;
-import android.graphics.Typeface;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
-import android.view.Gravity;
-import android.view.ViewGroup;
-import android.widget.Button;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.color.DynamicColors;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -24,7 +28,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
 
     private static final String DIALER_FILES = "/data/user/0/com.google.android.dialer/files";
     private static final String CUSTOM_DIR = DIALER_FILES + "/custom_sounds";
@@ -44,12 +48,25 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private MediaPlayer player;
     private int playingIdx = -1;
-    private final Button[] playButtons = new Button[KEYS.length];
+    private final MaterialButton[] playButtons = new MaterialButton[KEYS.length];
+    private LinearLayout list;
+    private MaterialButton langButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        applySavedTheme();
+        DynamicColors.applyToActivityIfAvailable(this);
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        list = findViewById(R.id.list);
+        langButton = findViewById(R.id.lang);
+        langButton.setOnClickListener(v -> {
+            prefs.edit().putString("lang", isRu() ? "en" : "ru").apply();
+            render();
+        });
+        findViewById(R.id.theme).setOnClickListener(v -> toggleTheme());
         render();
     }
 
@@ -57,6 +74,21 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         stopPlayer();
         super.onDestroy();
+    }
+
+    private void applySavedTheme() {
+        String m = prefs.getString("theme", "system");
+        int mode = "dark".equals(m) ? AppCompatDelegate.MODE_NIGHT_YES
+            : "light".equals(m) ? AppCompatDelegate.MODE_NIGHT_NO
+            : AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+        AppCompatDelegate.setDefaultNightMode(mode);
+    }
+
+    private void toggleTheme() {
+        int ui = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        boolean night = ui == Configuration.UI_MODE_NIGHT_YES;
+        prefs.edit().putString("theme", night ? "light" : "dark").apply();
+        applySavedTheme();
     }
 
     private boolean isRu() {
@@ -77,86 +109,40 @@ public class MainActivity extends Activity {
 
     private void render() {
         stopPlayer();
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(32), dp(16), dp(24));
-        scroll.addView(root);
-
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("Dialer Patch");
-        title.setTextSize(24);
-        title.setTypeface(null, Typeface.BOLD);
-        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button lang = new Button(this);
-        lang.setText(isRu() ? "EN" : "RU");
-        lang.setOnClickListener(v -> {
-            prefs.edit().putString("lang", isRu() ? "en" : "ru").apply();
-            render();
-        });
-        header.addView(lang);
-        root.addView(header);
-
-        TextView info = new TextView(this);
-        info.setText(t(
-            "Custom sounds for Audio Emoji in Phone by Google. Root access is needed to copy sounds into the dialer. The other person hears the sound during the call.",
-            "Свои звуки для Аудиоэмодзи в Phone by Google. Для копирования звуков в звонилку нужен root. Собеседник слышит звук во время звонка."));
-        info.setPadding(0, dp(8), 0, dp(8));
-        root.addView(info);
-
+        langButton.setText(isRu() ? "EN" : "RU");
+        list.removeAllViews();
         for (int i = 0; i < KEYS.length; i++) {
-            addRow(root, i);
+            addRow(i);
         }
-        setContentView(scroll);
     }
 
-    private void addRow(LinearLayout root, final int idx) {
+    private void addRow(final int idx) {
         final String key = KEYS[idx];
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(0, dp(12), 0, dp(4));
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cp.topMargin = dp(8);
-        root.addView(card, cp);
+        View item = getLayoutInflater().inflate(R.layout.item_sound, list, false);
 
-        TextView name = new TextView(this);
-        name.setText(ICONS[idx] + "  " + (isRu() ? NAMES_RU[idx] : NAMES_EN[idx]));
-        name.setTextSize(18);
-        name.setTypeface(null, Typeface.BOLD);
-        card.addView(name);
+        ((TextView) item.findViewById(R.id.icon)).setText(ICONS[idx]);
+        ((TextView) item.findViewById(R.id.name)).setText(isRu() ? NAMES_RU[idx] : NAMES_EN[idx]);
 
         final String custom = prefs.getString("name_" + key, null);
-        TextView status = new TextView(this);
-        status.setText(custom != null
-            ? t("Custom: ", "Свой: ") + custom
-            : t("Original sound", "Оригинальный звук"));
-        card.addView(status);
+        ((TextView) item.findViewById(R.id.status)).setText(
+            custom != null ? custom : t("Original", "Оригинал"));
 
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
-        card.addView(buttons);
-
-        Button choose = new Button(this);
+        MaterialButton choose = item.findViewById(R.id.choose);
         choose.setText(t("Choose", "Выбрать"));
         choose.setOnClickListener(v -> pick(idx));
-        buttons.addView(choose, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        Button play = new Button(this);
+        MaterialButton play = item.findViewById(R.id.play);
         play.setText(t("Play", "Играть"));
         play.setEnabled(new File(getFilesDir(), "sounds/" + key).exists());
         play.setOnClickListener(v -> togglePlay(idx));
         playButtons[idx] = play;
-        buttons.addView(play, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        Button reset = new Button(this);
+        MaterialButton reset = item.findViewById(R.id.reset);
         reset.setText(t("Reset", "Сбросить"));
         reset.setEnabled(custom != null);
         reset.setOnClickListener(v -> resetSound(idx));
-        buttons.addView(reset, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        list.addView(item);
     }
 
     private void pick(int idx) {
@@ -175,7 +161,6 @@ public class MainActivity extends Activity {
         }
         final Uri uri = data.getData();
         final String key = KEYS[idx];
-        toast(t("Copying...", "Копирую..."));
         new Thread(() -> {
             String fileName = displayName(uri);
             String error = null;
@@ -192,7 +177,6 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (err == null) {
                     prefs.edit().putString("name_" + key, shownName).apply();
-                    toast(t("Saved", "Сохранено"));
                 } else {
                     showError(err);
                 }
@@ -212,7 +196,6 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (e == null) {
                     prefs.edit().remove("name_" + key).apply();
-                    toast(t("Reset to original", "Возвращён оригинал"));
                 } else {
                     showError(e);
                 }
@@ -333,9 +316,9 @@ public class MainActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(err);
         tv.setTextIsSelectable(true);
-        tv.setPadding(dp(20), dp(12), dp(20), dp(12));
+        tv.setPadding(dp(24), dp(12), dp(24), dp(12));
         sv.addView(tv);
-        new android.app.AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
             .setTitle(t("Failed", "Ошибка"))
             .setView(sv)
             .setPositiveButton("OK", null)

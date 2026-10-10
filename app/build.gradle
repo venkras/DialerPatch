@@ -59,4 +59,5 @@ dependencies {
     compileOnly 'de.robv.android.xposed:api:82'
     implementation 'org.luckypray:dexkit:2.0.3'
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+implementation 'com.google.android.material:material:1.12.0'
 }
