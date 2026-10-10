@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatDelegate;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.DynamicColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -111,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
         stopPlayer();
         langButton.setText(isRu() ? "EN" : "RU");
         list.removeAllViews();
+        addModeRow();
         for (int i = 0; i < KEYS.length; i++) {
             addRow(i);
         }
