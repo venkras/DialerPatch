@@ -1,11 +1,14 @@
 package com.venkras.dialerpatch;
 
-import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.List;
 
 import org.luckypray.dexkit.DexKitBridge;
+import org.luckypray.dexkit.query.FindClass;
 import org.luckypray.dexkit.query.FindMethod;
+import org.luckypray.dexkit.query.matchers.ClassMatcher;
 import org.luckypray.dexkit.query.matchers.MethodMatcher;
+import org.luckypray.dexkit.result.ClassData;
 import org.luckypray.dexkit.result.MethodData;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -28,7 +31,7 @@ public class RecDebugHook {
                 continue;
             }
             sb.append(c).append('.').append(e.getMethodName()).append(" < ");
-            if (++n >= 5) {
+            if (++n >= 4) {
                 break;
             }
         }
@@ -39,41 +42,77 @@ public class RecDebugHook {
         if (lpparam.appInfo == null || lpparam.appInfo.sourceDir == null) {
             return;
         }
+        ClassLoader cl = lpparam.classLoader;
         try (DexKitBridge bridge = DexKitBridge.create(lpparam.appInfo.sourceDir)) {
             List<MethodData> st = bridge.findMethod(FindMethod.create()
                 .matcher(MethodMatcher.create().usingStrings("StreamState(recordDownlink=")));
-            if (st.size() == 1) {
-                Class<?> c = st.get(0).getMethodInstance(lpparam.classLoader).getDeclaringClass();
-                for (Constructor<?> k : c.getDeclaredConstructors()) {
-                    XposedBridge.hookMethod(k, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            log("created " + p.thisObject + " from " + caller());
-                        }
-                    });
-                }
-                log("hooked StreamState " + c.getName());
-            } else {
+            if (st.size() != 1) {
                 log("StreamState anchor count: " + st.size());
+                return;
+            }
+            final Class<?> stateClass = st.get(0).getMethodInstance(cl).getDeclaringClass();
+            log("StreamState class " + stateClass.getName());
+
+            List<ClassData> rec = bridge.findClass(FindClass.create().matcher(
+                ClassMatcher.create().usingStrings("com/android/dialer/audio/recorder/impl/RecorderImpl")));
+            int hookedStart = 0;
+            for (ClassData cd : rec) {
+                Class<?> c = cd.getInstance(cl);
+                for (Method m : c.getDeclaredMethods()) {
+                    Class<?>[] p = m.getParameterTypes();
+                    if (p.length == 4 && p[0] == boolean.class && p[1] == boolean.class && p[2] == boolean.class) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam a) {
+                                log("recorder start: downlink=" + a.args[0] + " uplink=" + a.args[1]
+                                    + " playback=" + a.args[2] + " from " + caller());
+                            }
+                        });
+                        hookedStart++;
+                        log("hooked recorder start " + c.getName() + "." + m.getName());
+                    }
+                }
+            }
+            if (hookedStart == 0) {
+                log("recorder start method not found, classes: " + rec.size());
+            }
+
+            List<ClassData> fac = bridge.findClass(FindClass.create().matcher(
+                ClassMatcher.create().usingStrings("com/android/dialer/audio/recorder/impl/RecorderFactoryImpl")));
+            int hookedState = 0;
+            for (ClassData cd : fac) {
+                Class<?> c = cd.getInstance(cl);
+                for (Method m : c.getDeclaredMethods()) {
+                    Class<?>[] p = m.getParameterTypes();
+                    if (p.length >= 2 && p[1] == stateClass) {
+                        XposedBridge.hookMethod(m, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam a) {
+                                log("state set: " + a.args[1]);
+                            }
+                        });
+                        hookedState++;
+                        log("hooked state setter " + c.getName() + "." + m.getName());
+                    }
+                }
+            }
+            if (hookedState == 0) {
+                log("state setter not found, classes: " + fac.size());
             }
 
             List<MethodData> pb = bridge.findMethod(FindMethod.create()
                 .matcher(MethodMatcher.create().usingStrings("playback detected")));
-            if (pb.size() >= 1 && pb.size() <= 3) {
-                for (MethodData md : pb) {
-                    java.lang.reflect.Method m = md.getMethodInstance(lpparam.classLoader);
-                    XposedBridge.hookMethod(m, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam p) {
-                            log("playback request: " + p.method.getDeclaringClass().getName()
-                                + "." + p.method.getName());
-                        }
-                    });
-                    log("hooked " + m.getDeclaringClass().getName() + "." + m.getName());
-                }
-            } else {
-                log("playback anchor count: " + pb.size());
+            for (MethodData md : pb) {
+                Method m = md.getMethodInstance(cl);
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam a) {
+                        log("playback request: " + a.method.getDeclaringClass().getName()
+                            + "." + a.method.getName());
+                    }
+                });
             }
+            log("playback hooks: " + pb.size());
         } catch (Throwable t) {
             log("error: " + t);
         }
