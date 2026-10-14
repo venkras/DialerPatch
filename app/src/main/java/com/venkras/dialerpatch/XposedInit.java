@@ -79,6 +79,7 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
             if (loadDexKitNativeLibrary()) {
                 SonicHook.install(lpparam);
                 InterruptHook.install(lpparam);
+                SoundpadHook.install(lpparam);
                 NoLockHook.install(lpparam);
                 RecordingHook.install(lpparam);
 		SilenceAudioHook.install(lpparam);
