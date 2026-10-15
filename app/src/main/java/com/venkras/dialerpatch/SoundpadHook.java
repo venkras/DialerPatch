@@ -52,6 +52,9 @@ public class SoundpadHook {
             playMethod = play.get(0).getMethodInstance(cl);
             playMethod.setAccessible(true);
             icdClass = playMethod.getDeclaringClass();
+            log("play method params: " + playMethod.getParameterTypes().length
+                + " types=" + java.util.Arrays.toString(playMethod.getParameterTypes())
+                + " return=" + playMethod.getReturnType().getName());
             Class<?> playerClass = anchor.get(0).getMethodInstance(cl).getDeclaringClass();
 
             XC_MethodHook capture = new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
@@ -199,5 +202,16 @@ public class SoundpadHook {
         }
         Object res = playMethod.invoke(ic, f.getAbsolutePath());
         log("play " + name + " -> " + (res == null ? "null" : res.getClass().getName()));
+        if (res != null) {
+            try {
+                Method get = res.getClass().getMethod("get", long.class, java.util.concurrent.TimeUnit.class);
+                Object val = get.invoke(res, 3000L, java.util.concurrent.TimeUnit.MILLISECONDS);
+                log("future result: " + val);
+            } catch (java.lang.reflect.InvocationTargetException ite) {
+                log("future failed: " + ite.getCause());
+            } catch (Throwable t) {
+                log("future get not available: " + t);
+            }
+        }
     }
 }
