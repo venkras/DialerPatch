@@ -29,6 +29,7 @@ public class SoundpadHook {
     private static Method playMethod;
     private static Class<?> icdClass;
     private static long lastNotReadyLog = 0;
+    private static volatile long lastCapture = 0;
 
     private static void log(String s) {
         XposedBridge.log("[Soundpad] " + s);
@@ -62,6 +63,7 @@ public class SoundpadHook {
                 protected void beforeHookedMethod(MethodHookParam p) {
                     if (p.thisObject != null) {
                         player = p.thisObject;
+                        lastCapture = System.currentTimeMillis();
                     }
                 }
 
@@ -69,6 +71,7 @@ public class SoundpadHook {
                 protected void afterHookedMethod(MethodHookParam p) {
                     if (p.thisObject != null) {
                         player = p.thisObject;
+                        lastCapture = System.currentTimeMillis();
                     }
                 }
             };
@@ -148,6 +151,30 @@ public class SoundpadHook {
         return null;
     }
 
+    private static String dump(Object o) {
+        if (o == null) {
+            return "null";
+        }
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (Field fl : o.getClass().getDeclaredFields()) {
+                if (Modifier.isStatic(fl.getModifiers())) {
+                    continue;
+                }
+                fl.setAccessible(true);
+                Object v = fl.get(o);
+                String s = String.valueOf(v);
+                if (s.length() > 60) {
+                    s = s.substring(0, 60);
+                }
+                sb.append(fl.getName()).append('=').append(s).append(' ');
+            }
+        } catch (Throwable t) {
+            sb.append("dump error ").append(t);
+        }
+        return sb.toString();
+    }
+
     private static void notReady(String why) {
         long now = System.currentTimeMillis();
         if (now - lastNotReadyLog > 5000) {
@@ -200,13 +227,14 @@ public class SoundpadHook {
             log("no such file: " + name);
             return;
         }
+        log("seconds since player capture: " + ((System.currentTimeMillis() - lastCapture) / 1000));
         Object res = playMethod.invoke(ic, f.getAbsolutePath());
         log("play " + name + " -> " + (res == null ? "null" : res.getClass().getName()));
         if (res != null) {
             try {
                 Method get = res.getClass().getMethod("get", long.class, java.util.concurrent.TimeUnit.class);
                 Object val = get.invoke(res, 3000L, java.util.concurrent.TimeUnit.MILLISECONDS);
-                log("future result: " + val);
+                log("future result: " + (val == null ? "null" : val.getClass().getName()) + " " + dump(val));
             } catch (java.lang.reflect.InvocationTargetException ite) {
                 log("future failed: " + ite.getCause());
             } catch (Throwable t) {
