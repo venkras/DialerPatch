@@ -62,6 +62,9 @@ public class SoundpadHook {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam p) {
                     if (p.thisObject != null) {
+                        if (p.thisObject != player) {
+                            logStack("player captured via " + p.method);
+                        }
                         player = p.thisObject;
                         lastCapture = System.currentTimeMillis();
                     }
@@ -149,6 +152,16 @@ public class SoundpadHook {
             }
         }
         return null;
+    }
+
+    private static void logStack(String why) {
+        StringBuilder sb = new StringBuilder(why);
+        StackTraceElement[] st = new Throwable().getStackTrace();
+        int n = Math.min(st.length, 30);
+        for (int i = 0; i < n; i++) {
+            sb.append("\n    at ").append(st[i]);
+        }
+        log(sb.toString());
     }
 
     private static String dump(Object o) {
