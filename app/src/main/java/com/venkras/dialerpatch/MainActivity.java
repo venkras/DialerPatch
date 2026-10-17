@@ -28,6 +28,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.SeekBar;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.DynamicColors;
@@ -73,6 +76,15 @@ public class MainActivity extends AppCompatActivity {
     private TextView padEmpty;
     private final List<String> padShown = new ArrayList<>();
     private RecyclerView.Adapter<PadHolder> padAdapter;
+    private MediaPlayer padPlayer;
+    private String padCurrent;
+    private View padPlayerView;
+    private SeekBar padSeek;
+    private TextView padTitle;
+    private TextView padTime;
+    private MaterialButton padToggle;
+    private boolean padSeeking = false;
+    private final Handler padHandler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopPlayer();
+        closePadPlayerQuiet();
         super.onDestroy();
     }
 
@@ -375,10 +388,12 @@ public class MainActivity extends AppCompatActivity {
 
     private static class PadHolder extends RecyclerView.ViewHolder {
         final TextView name;
+        final MaterialButton play;
 
         PadHolder(View v) {
             super(v);
             name = v.findViewById(R.id.pad_name);
+            play = v.findViewById(R.id.pad_play);
         }
     }
 
@@ -418,6 +433,9 @@ public class MainActivity extends AppCompatActivity {
             public void onBindViewHolder(PadHolder h, int position) {
                 final String file = padShown.get(position);
                 h.name.setText(stripExt(file));
+                boolean cur = file.equals(padCurrent) && isPadPlaying();
+                h.play.setIconResource(cur ? R.drawable.ic_pause : R.drawable.ic_play);
+                h.play.setOnClickListener(v -> startPad(file, false));
                 h.itemView.setOnClickListener(v -> sendPad(file));
                 h.itemView.setOnLongClickListener(v -> {
                     confirmDeletePad(file);
@@ -448,12 +466,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         findViewById(R.id.pad_add).setOnClickListener(v -> pickPad());
+        setupPadPlayer();
         showPage(0);
     }
 
     private void showPage(int pos) {
         emojiPage.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
         padPage.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+        closePadPlayer();
         stopPlayer();
         updatePlayButtons();
     }
@@ -469,6 +489,8 @@ public class MainActivity extends AppCompatActivity {
         }
         ((TextInputLayout) findViewById(R.id.pad_search_layout)).setHint(t("Search sounds", "Поиск по названию"));
         ((MaterialButton) findViewById(R.id.pad_add)).setText(t("Add sounds", "Добавить звуки"));
+        ((MaterialSwitch) findViewById(R.id.pad_local)).setText(
+            t("Also play on this phone when sent", "Играть и на этом телефоне при отправке"));
         loadPad();
     }
 
@@ -598,6 +620,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendPad(final String file) {
         final String name = "pad_" + file;
+        if (prefs.getBoolean("pad_local", false)) {
+            startPad(file, true);
+        }
         new Thread(() -> {
             String cmd = "D=" + CUSTOM_DIR + "; U=$(stat -c %U " + DIALER_FILES + ") && "
                 + "echo \"" + name + "\" > $D/cmd && chown $U:$U $D/cmd && chmod 600 $D/cmd"
@@ -613,7 +638,12 @@ public class MainActivity extends AppCompatActivity {
         new MaterialAlertDialogBuilder(this)
             .setTitle(stripExt(file))
             .setMessage(t("Delete this sound?", "Удалить этот звук?"))
-            .setPositiveButton(t("Delete", "Удалить"), (d, w) -> deletePad(file))
+            .setPositiveButton(t("Delete", "Удалить"), (d, w) -> {
+                if (file.equals(padCurrent)) {
+                    closePadPlayer();
+                }
+                deletePad(file);
+            })
             .setNegativeButton(t("Cancel", "Отмена"), null)
             .show();
     }
@@ -629,6 +659,155 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }).start();
+    }
+
+    private boolean isPadPlaying() {
+        try {
+            return padPlayer != null && padPlayer.isPlaying();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private final Runnable padTick = new Runnable() {
+        @Override
+        public void run() {
+            updatePadProgress();
+            if (isPadPlaying()) {
+                padHandler.postDelayed(this, 250);
+            }
+        }
+    };
+
+    private static String fmtTime(int ms) {
+        int s = ms / 1000;
+        return String.format(Locale.US, "%d:%02d", s / 60, s % 60);
+    }
+
+    private void updatePadProgress() {
+        if (padPlayer == null) {
+            return;
+        }
+        try {
+            int pos = padPlayer.getCurrentPosition();
+            int dur = padPlayer.getDuration();
+            if (!padSeeking) {
+                padSeek.setProgress(pos);
+            }
+            padTime.setText(fmtTime(pos) + " / " + fmtTime(dur));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setupPadPlayer() {
+        padPlayerView = findViewById(R.id.pad_player);
+        padSeek = findViewById(R.id.pad_seek);
+        padTitle = findViewById(R.id.pad_title);
+        padTime = findViewById(R.id.pad_time);
+        padToggle = findViewById(R.id.pad_toggle);
+        padToggle.setIconResource(R.drawable.ic_play);
+        padToggle.setOnClickListener(v -> toggleCurrentPad());
+        findViewById(R.id.pad_close).setOnClickListener(v -> closePadPlayer());
+        padSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                if (fromUser && padPlayer != null) {
+                    padPlayer.seekTo(progress);
+                    padTime.setText(fmtTime(progress) + " / " + fmtTime(sb.getMax()));
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+                padSeeking = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+                padSeeking = false;
+            }
+        });
+        MaterialSwitch local = findViewById(R.id.pad_local);
+        local.setChecked(prefs.getBoolean("pad_local", false));
+        local.setOnCheckedChangeListener((b, on) -> prefs.edit().putBoolean("pad_local", on).apply());
+    }
+
+    private void startPad(String file, boolean restart) {
+        if (padPlayer != null && file.equals(padCurrent)) {
+            if (restart) {
+                padPlayer.seekTo(0);
+                padPlayer.start();
+                afterPadState();
+            } else {
+                toggleCurrentPad();
+            }
+            return;
+        }
+        closePadPlayerQuiet();
+        try {
+            MediaPlayer mp = new MediaPlayer();
+            mp.setDataSource(new File(padDir(), file).getAbsolutePath());
+            mp.setOnCompletionListener(m -> {
+                m.seekTo(0);
+                padSeek.setProgress(0);
+                afterPadState();
+            });
+            mp.prepare();
+            padPlayer = mp;
+            padCurrent = file;
+            padSeek.setMax(mp.getDuration());
+            padSeek.setProgress(0);
+            padTitle.setText(stripExt(file));
+            padPlayerView.setVisibility(View.VISIBLE);
+            mp.start();
+            afterPadState();
+        } catch (Exception e) {
+            closePadPlayerQuiet();
+            toast(t("Cannot play: ", "Не удаётся проиграть: ") + e.getMessage());
+        }
+    }
+
+    private void toggleCurrentPad() {
+        if (padPlayer == null) {
+            return;
+        }
+        if (isPadPlaying()) {
+            padPlayer.pause();
+        } else {
+            padPlayer.start();
+        }
+        afterPadState();
+    }
+
+    private void afterPadState() {
+        padToggle.setIconResource(isPadPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
+        padHandler.removeCallbacks(padTick);
+        padHandler.post(padTick);
+        if (padAdapter != null) {
+            padAdapter.notifyDataSetChanged();
+        }
+    }
+
+    private void closePadPlayerQuiet() {
+        padHandler.removeCallbacks(padTick);
+        if (padPlayer != null) {
+            try {
+                padPlayer.release();
+            } catch (Exception ignored) {
+            }
+            padPlayer = null;
+        }
+        padCurrent = null;
+    }
+
+    private void closePadPlayer() {
+        closePadPlayerQuiet();
+        if (padPlayerView != null) {
+            padPlayerView.setVisibility(View.GONE);
+        }
+        if (padAdapter != null) {
+            padAdapter.notifyDataSetChanged();
+        }
     }
 
     private void showError(String err) {

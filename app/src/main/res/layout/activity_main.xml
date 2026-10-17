@@ -93,6 +93,12 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/pad_local"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" />
+
             <TextView
                 android:id="@+id/pad_empty"
                 android:layout_width="match_parent"
@@ -108,6 +114,60 @@
                 android:layout_height="0dp"
                 android:layout_marginTop="8dp"
                 android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/pad_player"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/pad_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <SeekBar
+                    android:id="@+id/pad_seek"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/pad_time"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/pad_toggle"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="Play"
+                        app:iconTint="?attr/colorOnSurface" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/pad_close"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="Close"
+                        app:icon="@drawable/ic_close"
+                        app:iconTint="?attr/colorOnSurface" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
     </FrameLayout>
 </LinearLayout>
