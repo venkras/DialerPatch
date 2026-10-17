@@ -189,15 +189,15 @@ public class SoundpadHook {
             notReady("player not captured yet");
             return;
         }
-        Object ic = icd;
+        Object ic = findIcd(p);
         if (ic == null) {
-            ic = findIcd(p);
-            if (ic == null) {
-                notReady("icd instance not found");
-                return;
-            }
+            notReady("icd instance not found");
+            return;
+        }
+        if (ic != icd) {
             icd = ic;
-            log("icd instance found");
+            log("icd instance changed: " + Integer.toHexString(System.identityHashCode(ic))
+                + " player=" + Integer.toHexString(System.identityHashCode(p)));
         }
         String name = null;
         try (BufferedReader r = new BufferedReader(new FileReader(cmd))) {
