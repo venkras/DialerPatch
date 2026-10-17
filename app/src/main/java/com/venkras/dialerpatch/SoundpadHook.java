@@ -86,6 +86,15 @@ public class SoundpadHook {
                     XposedBridge.hookMethod(m, capture);
                 }
             }
+            XC_MethodHook icdWatch = new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    logStack("icd constructed: " + Integer.toHexString(System.identityHashCode(p.thisObject)));
+                }
+            };
+            for (Constructor<?> k : icdClass.getDeclaredConstructors()) {
+                XposedBridge.hookMethod(k, icdWatch);
+            }
             log("ready: icd=" + icdClass.getName() + "." + playMethod.getName()
                 + " player=" + playerClass.getName());
         } catch (Throwable t) {
