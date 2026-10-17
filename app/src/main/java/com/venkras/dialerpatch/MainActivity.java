@@ -620,6 +620,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendPad(final String file) {
         final String name = "pad_" + file;
+        android.util.Log.i("DialerPatchApp", "sendPad " + file + " local=" + prefs.getBoolean("pad_local", false));
         if (prefs.getBoolean("pad_local", false)) {
             startPad(file, true);
         }
@@ -711,6 +712,8 @@ public class MainActivity extends AppCompatActivity {
         padSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                android.util.Log.i("DialerPatchApp", "seek " + progress + " fromUser=" + fromUser
+                    + " playerNull=" + (padPlayer == null));
                 if (fromUser && padPlayer != null) {
                     padPlayer.seekTo(progress);
                     padTime.setText(fmtTime(progress) + " / " + fmtTime(sb.getMax()));
@@ -733,6 +736,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startPad(String file, boolean restart) {
+        android.util.Log.i("DialerPatchApp", "startPad " + file + " restart=" + restart
+            + " cur=" + padCurrent + " playerNull=" + (padPlayer == null));
         if (padPlayer != null && file.equals(padCurrent)) {
             if (restart) {
                 padPlayer.seekTo(0);
@@ -746,6 +751,10 @@ public class MainActivity extends AppCompatActivity {
         closePadPlayerQuiet();
         try {
             MediaPlayer mp = new MediaPlayer();
+            mp.setOnErrorListener((m, what, extra) -> {
+                android.util.Log.e("DialerPatchApp", "MediaPlayer error " + what + "/" + extra);
+                return false;
+            });
             mp.setDataSource(new File(padDir(), file).getAbsolutePath());
             mp.setOnCompletionListener(m -> {
                 m.seekTo(0);
@@ -768,6 +777,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleCurrentPad() {
+        android.util.Log.i("DialerPatchApp", "toggleCurrentPad playerNull=" + (padPlayer == null)
+            + " playing=" + isPadPlaying());
         if (padPlayer == null) {
             return;
         }
@@ -801,6 +812,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void closePadPlayer() {
+        android.util.Log.i("DialerPatchApp", "closePadPlayer called", new Throwable());
         closePadPlayerQuiet();
         if (padPlayerView != null) {
             padPlayerView.setVisibility(View.GONE);
