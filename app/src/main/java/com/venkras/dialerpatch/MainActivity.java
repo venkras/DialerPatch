@@ -16,6 +16,18 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.textfield.TextInputLayout;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.ViewGroup;
+import android.widget.EditText;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.DynamicColors;
@@ -53,6 +65,15 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout list;
     private MaterialButton langButton;
 
+    private static final int REQ_PAD = 2000;
+    private TabLayout tabs;
+    private View emojiPage;
+    private View padPage;
+    private EditText padSearch;
+    private TextView padEmpty;
+    private final List<String> padShown = new ArrayList<>();
+    private RecyclerView.Adapter<PadHolder> padAdapter;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
@@ -68,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
             render();
         });
         findViewById(R.id.theme).setOnClickListener(v -> toggleTheme());
+        setupPad();
         render();
     }
 
@@ -111,6 +133,7 @@ public class MainActivity extends AppCompatActivity {
     private void render() {
         stopPlayer();
         langButton.setText(isRu() ? "EN" : "RU");
+        updatePadTexts();
         list.removeAllViews();
         addModeRow();
         for (int i = 0; i < KEYS.length; i++) {
@@ -191,6 +214,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_PAD) {
+            handlePadResult(resultCode, data);
+            return;
+        }
         int idx = requestCode - REQ_PICK;
         if (idx < 0 || idx >= KEYS.length || resultCode != RESULT_OK || data == null || data.getData() == null) {
             return;
@@ -344,6 +371,264 @@ public class MainActivity extends AppCompatActivity {
                 playButtons[i].setIconResource(i == playingIdx ? R.drawable.ic_stop : R.drawable.ic_play);
             }
         }
+    }
+
+    private static class PadHolder extends RecyclerView.ViewHolder {
+        final TextView name;
+
+        PadHolder(View v) {
+            super(v);
+            name = v.findViewById(R.id.pad_name);
+        }
+    }
+
+    private void setupPad() {
+        tabs = findViewById(R.id.tabs);
+        emojiPage = findViewById(R.id.emoji_page);
+        padPage = findViewById(R.id.pad_page);
+        padSearch = findViewById(R.id.pad_search);
+        padEmpty = findViewById(R.id.pad_empty);
+        RecyclerView rv = findViewById(R.id.pad_list);
+
+        tabs.addTab(tabs.newTab().setText("Emoji"));
+        tabs.addTab(tabs.newTab().setText("Soundpad"));
+        tabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                showPage(tab.getPosition());
+            }
+
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {
+            }
+
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {
+            }
+        });
+
+        padAdapter = new RecyclerView.Adapter<PadHolder>() {
+            @Override
+            public PadHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+                View row = getLayoutInflater().inflate(R.layout.item_pad, parent, false);
+                return new PadHolder(row);
+            }
+
+            @Override
+            public void onBindViewHolder(PadHolder h, int position) {
+                final String file = padShown.get(position);
+                h.name.setText(stripExt(file));
+                h.itemView.setOnClickListener(v -> sendPad(file));
+                h.itemView.setOnLongClickListener(v -> {
+                    confirmDeletePad(file);
+                    return true;
+                });
+            }
+
+            @Override
+            public int getItemCount() {
+                return padShown.size();
+            }
+        };
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        rv.setAdapter(padAdapter);
+
+        padSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                loadPad();
+            }
+        });
+        findViewById(R.id.pad_add).setOnClickListener(v -> pickPad());
+        showPage(0);
+    }
+
+    private void showPage(int pos) {
+        emojiPage.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
+        padPage.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+        stopPlayer();
+        updatePlayButtons();
+    }
+
+    private void updatePadTexts() {
+        TabLayout.Tab t0 = tabs.getTabAt(0);
+        TabLayout.Tab t1 = tabs.getTabAt(1);
+        if (t0 != null) {
+            t0.setText(t("Emoji", "Эмодзи"));
+        }
+        if (t1 != null) {
+            t1.setText(t("Soundpad", "Саундпад"));
+        }
+        ((TextInputLayout) findViewById(R.id.pad_search_layout)).setHint(t("Search sounds", "Поиск по названию"));
+        ((MaterialButton) findViewById(R.id.pad_add)).setText(t("Add sounds", "Добавить звуки"));
+        loadPad();
+    }
+
+    private File padDir() {
+        File d = new File(getFilesDir(), "pad");
+        d.mkdirs();
+        return d;
+    }
+
+    private void loadPad() {
+        String q = padSearch.getText() == null ? ""
+            : padSearch.getText().toString().trim().toLowerCase(Locale.ROOT);
+        File[] files = padDir().listFiles();
+        List<String> all = new ArrayList<>();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile()) {
+                    all.add(f.getName());
+                }
+            }
+        }
+        Collections.sort(all, String.CASE_INSENSITIVE_ORDER);
+        padShown.clear();
+        for (String n : all) {
+            if (q.isEmpty() || n.toLowerCase(Locale.ROOT).contains(q)) {
+                padShown.add(n);
+            }
+        }
+        padAdapter.notifyDataSetChanged();
+        padEmpty.setVisibility(padShown.isEmpty() ? View.VISIBLE : View.GONE);
+        padEmpty.setText(all.isEmpty()
+            ? t("No sounds yet. Tap Add sounds.", "Звуков пока нет. Нажми «Добавить звуки».")
+            : t("Nothing found", "Ничего не найдено"));
+    }
+
+    private static String stripExt(String n) {
+        int i = n.lastIndexOf('.');
+        return i > 0 ? n.substring(0, i) : n;
+    }
+
+    private static String sanitizeName(String n) {
+        String s = n.replaceAll("[^\\p{L}\\p{N}._-]", "_");
+        while (s.contains("..")) {
+            s = s.replace("..", ".");
+        }
+        if (s.startsWith(".")) {
+            s = "_" + s.substring(1);
+        }
+        if (s.length() > 80) {
+            int dot = s.lastIndexOf('.');
+            String ext = (dot > 0 && s.length() - dot <= 8) ? s.substring(dot) : "";
+            s = s.substring(0, 80 - ext.length()) + ext;
+        }
+        return s.isEmpty() ? "sound" : s;
+    }
+
+    private void pickPad() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.setType("audio/*");
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(i, REQ_PAD);
+    }
+
+    private void handlePadResult(int resultCode, Intent data) {
+        if (resultCode != RESULT_OK || data == null) {
+            return;
+        }
+        final List<Uri> uris = new ArrayList<>();
+        if (data.getClipData() != null) {
+            for (int k = 0; k < data.getClipData().getItemCount(); k++) {
+                uris.add(data.getClipData().getItemAt(k).getUri());
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (uris.isEmpty()) {
+            return;
+        }
+        new Thread(() -> {
+            int ok = 0;
+            String error = null;
+            for (Uri u : uris) {
+                try {
+                    String name = sanitizeName(displayName(u));
+                    File out = new File(padDir(), name);
+                    try (InputStream in = getContentResolver().openInputStream(u);
+                         OutputStream os = new FileOutputStream(out)) {
+                        if (in == null) {
+                            throw new Exception("cannot open file");
+                        }
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while ((n = in.read(buf)) > 0) {
+                            os.write(buf, 0, n);
+                        }
+                    }
+                    ok++;
+                } catch (Exception e) {
+                    error = "copy: " + e;
+                }
+            }
+            if (ok > 0) {
+                String e2 = runSu(syncPadCommand());
+                if (e2 != null) {
+                    error = e2;
+                }
+            }
+            final String err = error;
+            runOnUiThread(() -> {
+                loadPad();
+                if (err != null) {
+                    showError(err);
+                }
+            });
+        }).start();
+    }
+
+    private String syncPadCommand() {
+        String src = padDir().getAbsolutePath();
+        return "D=" + CUSTOM_DIR + "; U=$(stat -c %U " + DIALER_FILES + ") && "
+            + "mkdir -p $D && for f in " + src + "/*; do [ -f \"$f\" ] || continue; "
+            + "b=$(basename \"$f\"); "
+            + "cp \"$f\" \"$D/pad_$b\" && chown $U:$U \"$D/pad_$b\" && chmod 600 \"$D/pad_$b\" || exit 1; done; "
+            + "chown $U:$U $D; chmod 700 $D; (restorecon -R $D || true)";
+    }
+
+    private void sendPad(final String file) {
+        final String name = "pad_" + file;
+        new Thread(() -> {
+            String cmd = "D=" + CUSTOM_DIR + "; U=$(stat -c %U " + DIALER_FILES + ") && "
+                + "echo \"" + name + "\" > $D/cmd && chown $U:$U $D/cmd && chmod 600 $D/cmd"
+                + " && (restorecon $D/cmd || true)";
+            final String err = runSu(cmd);
+            if (err != null) {
+                runOnUiThread(() -> showError(err));
+            }
+        }).start();
+    }
+
+    private void confirmDeletePad(final String file) {
+        new MaterialAlertDialogBuilder(this)
+            .setTitle(stripExt(file))
+            .setMessage(t("Delete this sound?", "Удалить этот звук?"))
+            .setPositiveButton(t("Delete", "Удалить"), (d, w) -> deletePad(file))
+            .setNegativeButton(t("Cancel", "Отмена"), null)
+            .show();
+    }
+
+    private void deletePad(final String file) {
+        new Thread(() -> {
+            new File(padDir(), file).delete();
+            final String e = runSu("rm -f " + CUSTOM_DIR + "/pad_" + file);
+            runOnUiThread(() -> {
+                loadPad();
+                if (e != null) {
+                    showError(e);
+                }
+            });
+        }).start();
     }
 
     private void showError(String err) {
