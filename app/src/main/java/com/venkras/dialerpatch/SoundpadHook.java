@@ -30,6 +30,7 @@ public class SoundpadHook {
     private static Class<?> icdClass;
     private static long lastNotReadyLog = 0;
     private static volatile long lastCapture = 0;
+    private static volatile Object icdLatest;
 
     private static void log(String s) {
         XposedBridge.log("[Soundpad] " + s);
@@ -89,7 +90,8 @@ public class SoundpadHook {
             XC_MethodHook icdWatch = new XC_MethodHook(XCallback.PRIORITY_HIGHEST) {
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
-                    logStack("icd constructed: " + Integer.toHexString(System.identityHashCode(p.thisObject)));
+                    icdLatest = p.thisObject;
+                    log("icd constructed: " + Integer.toHexString(System.identityHashCode(p.thisObject)));
                 }
             };
             for (Constructor<?> k : icdClass.getDeclaredConstructors()) {
@@ -207,15 +209,22 @@ public class SoundpadHook {
 
     private static void handle(File dir, File cmd) throws Exception {
         Object p = player;
-        if (p == null) {
-            notReady("player not captured yet");
-            return;
+        Object ic = icdLatest;
+        String how = "constructor";
+        if (ic == null && p != null) {
+            ic = findIcd(p);
+            how = "player";
         }
-        Object ic = findIcd(p);
         if (ic == null) {
-            notReady("icd instance not found");
+            notReady("icd not captured yet");
             return;
         }
+        if (p != null) {
+            Object viaPlayer = findIcd(p);
+            log("icd via player=" + (viaPlayer == null ? "null" : Integer.toHexString(System.identityHashCode(viaPlayer)))
+                + " latest=" + Integer.toHexString(System.identityHashCode(icdLatest)));
+        }
+        log("using icd from " + how);
         if (ic != icd) {
             icd = ic;
             log("icd instance changed: " + Integer.toHexString(System.identityHashCode(ic))
