@@ -1,7 +1,10 @@
 package com.venkras.dialerpatch;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 
@@ -11,16 +14,22 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Runs in system_server. Audio Emoji reach the other person through the Telephony Tx device,
- * and audioserver allows that only for apps holding MODIFY_PHONE_STATE. On Pixel the Dialer is a
- * privileged system app; elsewhere it is a regular app and remote playback fails with
- * "modify phone state not allowed". This reports the permission to audioserver for the Dialer
- * only; the Dialer does not get it anywhere else.
+ * Runs in system_server. On Pixel the Dialer is a privileged system app; elsewhere it is a
+ * regular app and audioserver refuses it two permissions:
+ * - MODIFY_PHONE_STATE: Audio Emoji reach the other person through the Telephony Tx device,
+ *   otherwise playback fails with "modify phone state not allowed".
+ * - CAPTURE_AUDIO_OUTPUT: call recording reads the VOICE_CALL source, otherwise it fails with
+ *   "missing perms for source 4".
+ * This reports both permissions to audioserver for the Dialer only; the Dialer does not get them
+ * anywhere else.
  */
 public class PhoneStateHook {
 
     private static final String DIALER = "com.google.android.dialer";
-    private static final String PERMISSION = "android.permission.MODIFY_PHONE_STATE";
+    private static final Set<String> PERMISSIONS = new HashSet<>(Arrays.asList(
+        "android.permission.MODIFY_PHONE_STATE",
+        "android.permission.CAPTURE_AUDIO_OUTPUT"
+    ));
     private static final String PROVIDER = "com.android.server.audio.AudioServerPermissionProvider";
 
     static void install(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -33,7 +42,7 @@ public class PhoneStateHook {
                         final Object self = param.thisObject;
                         final BiPredicate<Integer, String> original = (BiPredicate<Integer, String>) param.args[1];
                         param.args[1] = (BiPredicate<Integer, String>) (uid, perm) ->
-                            original.test(uid, perm) || (PERMISSION.equals(perm) && isDialer(self, uid));
+                            original.test(uid, perm) || (PERMISSIONS.contains(perm) && isDialer(self, uid));
                     }
                 });
             XposedBridge.log("[PhoneStateHook] hooked " + PROVIDER);

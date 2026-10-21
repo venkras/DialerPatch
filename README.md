@@ -40,7 +40,7 @@ Install the new APK over the old one and force-stop Phone by Google. Releases ar
 
 Newer `-downloadable` Dialer builds (242+) no longer contain Audio Emoji. Use a `-pixel2026` build instead; the module reports the Pixel 2026 system feature to the Dialer so it stops showing "This device is not supported".
 
-Audio Emoji are sent to the other person through the Telephony Tx audio device, which audioserver allows only for apps holding `MODIFY_PHONE_STATE`. On Pixel the Dialer is a privileged system app; on other phones it is not, so the sound plays only locally. To fix this the module hooks `system_server` and reports that permission to audioserver for the Dialer only. Enable **System Framework** in the module scope and reboot for this to work.
+Audio Emoji are sent to the other person through the Telephony Tx audio device, which audioserver allows only for apps holding `MODIFY_PHONE_STATE`. On Pixel the Dialer is a privileged system app; on other phones it is not, so the sound plays only locally. The same applies to call recording, which reads the call audio and needs `CAPTURE_AUDIO_OUTPUT`; without it recording saves nothing. To fix both, the module hooks `system_server` and reports these two permissions to audioserver for the Dialer only. Enable **System Framework** in the module scope and reboot for this to work.
 
 ## Custom sounds
 
