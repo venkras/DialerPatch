@@ -87,6 +87,7 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
                 InterruptHook.install(lpparam);
                 NoLockHook.install(lpparam);
                 RecordingHook.install(lpparam);
+                TtsFallbackHook.install(lpparam);
 		SilenceAudioHook.install(lpparam);
             }
         } catch (Throwable t) {

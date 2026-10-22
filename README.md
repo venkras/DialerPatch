@@ -42,6 +42,8 @@ Newer `-downloadable` Dialer builds (242+) no longer contain Audio Emoji. Use a 
 
 Audio Emoji are sent to the other person through the Telephony Tx audio device, which audioserver allows only for apps holding `MODIFY_PHONE_STATE`. On Pixel the Dialer is a privileged system app; on other phones it is not, so the sound plays only locally. The same applies to call recording, which reads the call audio and needs `CAPTURE_AUDIO_OUTPUT`; without it recording saves nothing. To fix both, the module hooks `system_server` and reports these two permissions to audioserver for the Dialer only. Enable **System Framework** in the module scope and reboot for this to work.
 
+Before recording starts, the Dialer plays a disclosure. Apart from a few countries with a built-in file, it synthesizes the disclosure with the default TTS engine. If that engine has no voice for the language (for example, the OnePlus engine has no Russian), the Dialer would cancel the recording. In that case the module writes a short silent file instead, for any language.
+
 ## Custom sounds
 
 Open the DialerPatch app. There is one block for each emoji with Choose, Play and Reset buttons. The language button switches between English and Russian.
