@@ -38,9 +38,15 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        if (lpparam.packageName.equals("android")) {
+            PhoneStateHook.install(lpparam);
+            return;
+        }
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) {
             return;
         }
+
+        PixelFeatureHook.install(lpparam);
 
         ClassLoader classLoader = lpparam.classLoader;
         Class<?> targetClass = null;
@@ -81,6 +87,7 @@ public class XposedInit implements IXposedHookLoadPackage, IXposedHookZygoteInit
                 InterruptHook.install(lpparam);
                 NoLockHook.install(lpparam);
                 RecordingHook.install(lpparam);
+                TtsFallbackHook.install(lpparam);
 		SilenceAudioHook.install(lpparam);
             }
         } catch (Throwable t) {

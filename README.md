@@ -8,6 +8,7 @@ Xposed module for Phone by Google (`com.google.android.dialer`). It enables Audi
 - **Custom sounds**: replace any of the six Audio Emoji sounds with your own file from a settings screen in the module app.
 - **No button lock**: the Audio Emoji buttons are blocked only while the on-screen animation plays, not for an extra second after the sound.
 - **Call recording without announcement** 
+- **Pixel builds on other phones**: `-pixel2026` Dialer builds no longer say "This device is not supported", and Audio Emoji reach the other person (see below).
 
 ## How it works
 
@@ -27,13 +28,21 @@ Audio Emoji sounds are sent in the caller's voice stream, so the other person he
 1. Install the APK.
 2. Grant root permissions
 3. Enable the module in Vector (or LSPosed).
-4. Set the scope to `com.google.android.dialer`.
+4. Set the scope to `com.google.android.dialer` and System Framework (`android`), then reboot.
 5. Force-stop Phone by Google and open it again.
 6. Check Settings in the Phone app.
 
 ### Updating
 
 Install the new APK over the old one and force-stop Phone by Google. Releases are signed with a permanent key, so updates install without uninstalling. v1.0 was signed with a different key: if you have v1.0, uninstall it once before installing a newer version.
+
+## Pixel builds and non-Pixel phones
+
+Newer `-downloadable` Dialer builds (242+) no longer contain Audio Emoji. Use a `-pixel2026` build instead; the module reports the Pixel 2026 system feature to the Dialer so it stops showing "This device is not supported".
+
+Audio Emoji are sent to the other person through the Telephony Tx audio device, which audioserver allows only for apps holding `MODIFY_PHONE_STATE`. On Pixel the Dialer is a privileged system app; on other phones it is not, so the sound plays only locally. The same applies to call recording, which reads the call audio and needs `CAPTURE_AUDIO_OUTPUT`; without it recording saves nothing. To fix both, the module hooks `system_server` and reports these two permissions to audioserver for the Dialer only. Enable **System Framework** in the module scope and reboot for this to work.
+
+Before recording starts, the Dialer plays a disclosure. Apart from a few countries with a built-in file, it synthesizes the disclosure with the default TTS engine. If that engine has no voice for the language (for example, the OnePlus engine has no Russian), the Dialer would cancel the recording. In that case the module writes a short silent file instead, for any language.
 
 ## Custom sounds
 
