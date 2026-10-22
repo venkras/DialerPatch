@@ -6,8 +6,10 @@ import android.speech.tts.UtteranceProgressListener;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindClass;
@@ -37,15 +39,18 @@ public class TtsFallbackHook {
         if (sourceDir == null) {
             return;
         }
-        final String wrapper;
+        // The wrapper and its coroutine lambdas all reference the anchor string.
+        final Set<String> wrapper = new HashSet<>();
         try (DexKitBridge bridge = DexKitBridge.create(sourceDir)) {
             List<ClassData> found = bridge.findClass(FindClass.create()
                 .matcher(ClassMatcher.create().usingStrings(TTS_WRAPPER_ANCHOR)));
-            if (found.size() != 1) {
-                XposedBridge.log("[TtsFallbackHook] expected 1 TTS wrapper class, found " + found.size());
+            for (ClassData c : found) {
+                wrapper.add(c.getName());
+            }
+            if (wrapper.isEmpty()) {
+                XposedBridge.log("[TtsFallbackHook] TTS wrapper class not found");
                 return;
             }
-            wrapper = found.get(0).getName();
         } catch (Throwable t) {
             XposedBridge.log("[TtsFallbackHook] search error: " + t);
             return;
@@ -90,9 +95,9 @@ public class TtsFallbackHook {
         }
     }
 
-    private static boolean calledFrom(String className) {
+    private static boolean calledFrom(Set<String> classNames) {
         for (StackTraceElement e : new Throwable().getStackTrace()) {
-            if (className.equals(e.getClassName())) {
+            if (classNames.contains(e.getClassName())) {
                 return true;
             }
         }
